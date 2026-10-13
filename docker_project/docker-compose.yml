@@ -1,0 +1,49 @@
+services:
+  app:
+    build:
+      context: ./backend           # создать образ по докер файлу из папки backend
+    image: app-backend:1.0.0         
+    ports:
+      - "8080:8080"                   # открыть порт, чтобы заходить с браузера 
+    environment:          # переменные для подключения к базе
+      HTTP_PORT: "8080"
+      STATIC_DIR: /app/static
+      DB_HOST: db                     
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+    volumes:
+      - ./frontend:/app/static:ro     # подключить фронт, read only
+    depends_on:
+      db:
+        condition: service_healthy    # запус только после базы
+    restart: unless-stopped          #перезапуск при сбое
+    networks:         
+      - app_net         #подключение к сети
+
+  db:
+    image: postgres:16-alpine     # готовый образ
+    environment:              # создать пользователя, пароль из env
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    healthcheck:  # проверка, что база готова
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    networks:
+      - app_net
+
+volumes:
+  db_data:
+
+networks:
+  app_net:
+    driver: bridge
